@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           Int           @id @default(autoincrement())
+  email        String?       @unique
+  name         String?
+  githubId     String?       @unique
+  password     String?
+  issues       Issue[]
+  pullRequests PullRequest[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// Issue model
+model Issue {
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String
+  status       Status        @default(Open)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       Int
+  user         User          @relation(fields: [userId], references: [id])
+  pullRequests PullRequest[]
+
+  PullRequest PullRequest[] @relation("IssuePullRequest")
+
+  IssuePullRequest IssuePullRequest[]
+}
+
+model PullRequest {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  status      PRStatus @default(Open)
+  merged      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  issues      Issue[]  @relation("IssuePullRequest")
+  Issue       Issue[]
+
+  IssuePullRequest IssuePullRequest[]
+}
+
+// Status enum for Issues and PRs
+enum Status {
+  Open
+  InProgress
+  Closed
+}
+
+enum PRStatus {
+  Open
+  Merged
+  Closed
+}
+
+model IssuePullRequest {
+  issueId       Int
+  pullRequestId Int
+
+  issue       Issue       @relation(fields: [issueId], references: [id])
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id])
+
+  @@id([issueId, pullRequestId])
+}
