@@ -1,33 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import prisma from '../../../lib/prisma'; // Ensure prisma client is initialized properly
+import prisma from '../../../lib/prisma';
 import crypto from 'crypto';
 
 const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 
-type GitHubIssuePayload = {
-  action: string;
-  issue: {
-    id: number;
-    title: string;
-    body: string;
-    user: { id: string; login: string };
-  };
-  repository: { id: number; name: string };
-};
-
-type GitHubPullRequestPayload = {
-  action: string;
-  pull_request: {
-    id: number;
-    title: string;
-    body: string;
-    user: { id: string; login: string };
-    merged: boolean;
-  };
-  repository: { id: number; name: string };
-};
-
-// Helper to validate the webhook signature
 function validateSignature(
   payload: string,
   signature: string | string[] | undefined
@@ -38,7 +14,6 @@ function validateSignature(
   return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
 }
 
-// Main handler for GitHub webhooks
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -46,38 +21,34 @@ export default async function handler(
   const signature = req.headers['x-hub-signature-256'];
   const event = req.headers['x-github-event'] as string;
 
-  // Validate the signature
   const isValid = validateSignature(JSON.stringify(req.body), signature);
   if (!isValid) {
     return res.status(401).json({ error: 'Invalid signature' });
   }
 
-  // Handle the specific GitHub events (issue, PR)
   try {
     switch (event) {
       case 'issues':
-        await handleIssueEvent(req.body as GitHubIssuePayload);
+        await handleIssueEvent(req.body);
         break;
       case 'pull_request':
-        await handlePullRequestEvent(req.body as GitHubPullRequestPayload);
+        await handlePullRequestEvent(req.body);
         break;
       default:
         console.log(`Unhandled event type: ${event}`);
         return res.status(400).json({ error: `Unhandled event: ${event}` });
     }
 
-    res.status(200).json({ message: 'Webhook processed successfully' });
+    res.status(200).json({ message: 'Event handled successfully' });
   } catch (error) {
-    console.error('Error handling webhook:', error);
+    console.error('Error handling event:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 }
 
-// Handle issue events
-async function handleIssueEvent(payload: GitHubIssuePayload) {
+async function handleIssueEvent(payload: any) {
   const { action, issue } = payload;
 
-  // Action can be opened or closed
   if (action === 'opened' || action === 'closed') {
     await prisma.issue.upsert({
       where: { id: issue.id },
@@ -86,20 +57,21 @@ async function handleIssueEvent(payload: GitHubIssuePayload) {
         title: issue.title,
         description: issue.body,
         status: action === 'opened' ? 'Open' : 'Closed',
-        userId: await getUserIdByGitHubId(issue.user.id),
+        userId:
+          (await getUserIdByGitHubId(issue.user.id)) ??
+          (() => {
+            throw new Error('User not found');
+          })(),
       },
-      update: {
-        status: action === 'opened' ? 'Open' : 'Closed',
-      },
+      update: { status: action === 'opened' ? 'Open' : 'Closed' },
     });
   }
 }
 
-// Handle pull request events
-async function handlePullRequestEvent(payload: GitHubPullRequestPayload) {
+async function handlePullRequestEvent(payload: any) {
   const { action, pull_request } = payload;
 
-  if (action === 'opened' || action === 'closed' || action === 'merged') {
+  if (['opened', 'closed', 'merged'].includes(action)) {
     await prisma.pullRequest.upsert({
       where: { id: pull_request.id },
       create: {
@@ -113,7 +85,11 @@ async function handlePullRequestEvent(payload: GitHubPullRequestPayload) {
             ? 'Closed'
             : 'Merged',
         merged: action === 'merged',
-        userId: await getUserIdByGitHubId(pull_request.user.id),
+        userId:
+          (await getUserIdByGitHubId(pull_request.user.id)) ??
+          (() => {
+            throw new Error('User not found');
+          })(),
       },
       update: {
         status:
@@ -128,10 +104,7 @@ async function handlePullRequestEvent(payload: GitHubPullRequestPayload) {
   }
 }
 
-// Helper function to map GitHub user ID to the local user ID
-async function getUserIdByGitHubId(githubId: string): Promise<number | null> {
-  const user = await prisma.user.findUnique({
-    where: { githubId: githubId },
-  });
-  return user?.id || null;
+async function getUserIdByGitHubId(githubId: string) {
+  const user = await prisma.user.findUnique({ where: { githubId } });
+  return user?.id || undefined;
 }
