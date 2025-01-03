@@ -13,6 +13,7 @@ model User {
   name         String?
   githubId     String?       @unique
   password     String?
+  auth_type    Boolean       @default(false)
   issues       Issue[]
   pullRequests PullRequest[]
   createdAt    DateTime      @default(now())
