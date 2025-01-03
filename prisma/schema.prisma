@@ -20,7 +20,6 @@ model User {
   updatedAt    DateTime      @updatedAt
 }
 
-// Issue model
 model Issue {
   id           Int           @id @default(autoincrement())
   title        String
@@ -30,9 +29,7 @@ model Issue {
   updatedAt    DateTime      @updatedAt
   userId       Int
   user         User          @relation(fields: [userId], references: [id])
-  pullRequests PullRequest[]
-
-  PullRequest PullRequest[] @relation("IssuePullRequest")
+  pullRequests PullRequest[] @relation("IssuePullRequest")
 
   IssuePullRequest IssuePullRequest[]
 }
@@ -48,22 +45,8 @@ model PullRequest {
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
   issues      Issue[]  @relation("IssuePullRequest")
-  Issue       Issue[]
 
   IssuePullRequest IssuePullRequest[]
-}
-
-// Status enum for Issues and PRs
-enum Status {
-  Open
-  InProgress
-  Closed
-}
-
-enum PRStatus {
-  Open
-  Merged
-  Closed
 }
 
 model IssuePullRequest {
@@ -74,4 +57,16 @@ model IssuePullRequest {
   pullRequest PullRequest @relation(fields: [pullRequestId], references: [id])
 
   @@id([issueId, pullRequestId])
+}
+
+enum Status {
+  Open
+  InProgress
+  Closed
+}
+
+enum PRStatus {
+  Open
+  Merged
+  Closed
 }
