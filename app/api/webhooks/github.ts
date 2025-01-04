@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import prisma from '../../../lib/prisma';
 import crypto from 'crypto';
+import { generateGeminiMessage } from '../../../lib/gemini'; // Import Gemini function
 
 const GITHUB_WEBHOOK_SECRET = process.env.GITHUB_WEBHOOK_SECRET || '';
 
@@ -50,6 +51,11 @@ async function handleIssueEvent(payload: any) {
   const { action, issue } = payload;
 
   if (action === 'opened' || action === 'closed') {
+    // Generate a Gemini message based on the issue
+    const prompt = `Please summarize the following issue and provide any recommendations: ${issue.title} - ${issue.body}`;
+    const geminiMessage = await generateGeminiMessage(prompt);
+
+    // Upsert the issue into the database
     await prisma.issue.upsert({
       where: { id: issue.id },
       create: {
@@ -65,6 +71,15 @@ async function handleIssueEvent(payload: any) {
       },
       update: { status: action === 'opened' ? 'Open' : 'Closed' },
     });
+
+    // Optionally: post the Gemini message as a comment in the GitHub issue (if necessary)
+    if (geminiMessage) {
+      await postGitHubComment(
+        issue.number,
+        issue.repository.full_name,
+        geminiMessage
+      );
+    }
   }
 }
 
@@ -72,6 +87,11 @@ async function handlePullRequestEvent(payload: any) {
   const { action, pull_request } = payload;
 
   if (['opened', 'closed', 'merged'].includes(action)) {
+    // Generate a Gemini message based on the pull request
+    const prompt = `Summarize the following pull request and provide a recommendation: ${pull_request.title} - ${pull_request.body}`;
+    const geminiMessage = await generateGeminiMessage(prompt);
+
+    // Upsert the pull request into the database
     await prisma.pullRequest.upsert({
       where: { id: pull_request.id },
       create: {
@@ -101,10 +121,38 @@ async function handlePullRequestEvent(payload: any) {
         merged: action === 'merged',
       },
     });
+
+    // Optionally: post the Gemini message as a comment in the GitHub pull request (if necessary)
+    if (geminiMessage) {
+      await postGitHubComment(
+        pull_request.number,
+        pull_request.repository.full_name,
+        geminiMessage
+      );
+    }
   }
 }
 
 async function getUserIdByGitHubId(githubId: string) {
   const user = await prisma.user.findUnique({ where: { githubId } });
   return user?.id || undefined;
+}
+
+// Example function to post a comment to GitHub (use fetch or axios to make API requests to GitHub)
+async function postGitHubComment(
+  issueOrPrNumber: number,
+  repositoryFullName: string,
+  comment: string
+) {
+  const url = `https://api.github.com/repos/${repositoryFullName}/issues/${issueOrPrNumber}/comments`;
+  const accessToken = process.env.GITHUB_ACCESS_TOKEN;
+
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `token ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ body: comment }),
+  });
 }
