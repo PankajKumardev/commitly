@@ -65,8 +65,19 @@ enum Status {
   Closed
 }
 
+enum IssueStatus {
+  Open
+  InProgress
+  Closed
+}
+
 enum PRStatus {
   Open
   Merged
   Closed
+}
+
+enum AuthType {
+  Github
+  Email
 }

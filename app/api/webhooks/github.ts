@@ -140,7 +140,7 @@ async function getUserIdByGitHubId(githubId: string) {
 
 // Example function to post a comment to GitHub (use fetch or axios to make API requests to GitHub)
 async function postGitHubComment(
-  issueOrPrNumber: number,
+  issueOrPrNumber: number,  
   repositoryFullName: string,
   comment: string
 ) {
@@ -154,5 +154,6 @@ async function postGitHubComment(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ body: comment }),
-  });
+
+  })
 }
